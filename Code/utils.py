@@ -105,7 +105,7 @@ def get_segmentation_annotation(img_path, config, save_dir=None):
         _, detections = maskrcnn_model(images, sizes) 
 
         # postprocess
-        detections = post.postprocess_detections(new_sizes, original_sizes, detections=detections)
+        detections = post.postprocess_detections(new_sizes, original_sizes, conf_threshold=0.2, detections=detections)
         
     # save results
     if save_dir is not None:
@@ -191,7 +191,8 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
     airobj_model.eval()
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    
+    points = points[0]
+    seg = seg[0]
     keypoints = points['points']
     descriptors = points['point_descs']
     
@@ -234,7 +235,7 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
         #                                     [seg], None, [points], True, False)
         pass
     
-    return airobj_descs
+    return airobj_obj_descs
     
     
 def collate_self_test(batch):
@@ -256,28 +257,28 @@ def collate_self_test(batch):
     return batch_mod
 
 if __name__ == "__main__":
-    img_path = '/Users/ramya/University/misc/Baseline_FGSBIR/Dataset/ShoeV2/photo/1031000079.png'
-    save_dir = '/Users/ramya/University/misc/Baseline_FGSBIR/Dataset/ShoeV2/seg_results'
+    img_path = './Dataset/ShoeV2/photo/1031000079.png'
+    save_dir = './Dataset/ShoeV2/seg_results'
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     
     image = cv2.imread(img_path)    
     
-    maskrcnn_config_file = '/Users/ramya/University/misc/Baseline_FGSBIR/Code/config/maskrcnn_inference.yaml'
+    maskrcnn_config_file = './Code/config/maskrcnn_inference.yaml'
     with open(maskrcnn_config_file, 'r', encoding='utf-8') as f:
         config = f.read()
         config = yaml.safe_load(config)
         seg = get_segmentation_annotation(img_path, config, save_dir=None)
     f.close()
     
-    superpoint_config_file = '/Users/ramya/University/misc/Baseline_FGSBIR/Code/config/superpoint_inference.yaml'
+    superpoint_config_file = './Code/config/superpoint_inference.yaml'
     with open(superpoint_config_file, 'r', encoding='utf-8') as f:
         config = f.read()
         config = yaml.safe_load(config)
         points = get_superpoint_points(img_path, config, save_dir=None)
     f.close()    
     
-    airobj_config_file = '/Users/ramya/University/misc/Baseline_FGSBIR/Code/config/airobj_inference.yaml'
+    airobj_config_file = './Code/config/airobj_inference.yaml'
     with open(airobj_config_file, 'r', encoding='utf-8') as f:
         config = f.read()
         config = yaml.safe_load(config)

@@ -191,6 +191,7 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
     airobj_model.eval()
     
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    
     points = points[0]
     seg = seg[0]
     keypoints = points['points']
@@ -210,9 +211,9 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
         
         adj = get_adj(np_obj_pts, tri)
 
-        airobj_adjs.append(torch.from_numpy(adj).float().to(device))
-        airobj_points.append(keypoints[np.where(object_filter==1)[0]].float().to(device))
-        airobj_descs.append(descriptors[np.where(object_filter==1)[0]].float().to(device))
+        airobj_adjs.append(torch.from_numpy(adj).float().to(device)) # Size: NxN
+        airobj_points.append(keypoints[np.where(object_filter==1)[0]].float().to(device)) # Size: Nx2
+        airobj_descs.append(descriptors[np.where(object_filter==1)[0]].float().to(device)) # Size: NxD
         
         inds = np.array(np.where(mask))
         y1, x1 = np.amin(inds, axis=1)
@@ -227,7 +228,7 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
     with torch.no_grad():
         airobj_obj_descs = []
         for k in range(len(airobj_points)):
-            airobj_obj_descs.append(airobj_model([airobj_points[k]], [airobj_descs[k]], [airobj_adjs[k]]))
+            airobj_obj_descs.append(airobj_model([airobj_points[k]], [airobj_descs[k]], [airobj_adjs[k]])) # Size: 1x2048
         airobj_obj_descs = torch.cat(airobj_obj_descs)
         
     if save_dir:
@@ -255,33 +256,3 @@ def collate_self_test(batch):
     batch_mod['positive_img'] = torch.stack(batch_mod['positive_img'], dim=0)
 
     return batch_mod
-
-if __name__ == "__main__":
-    img_path = './Dataset/ShoeV2/photo/1031000079.png'
-    save_dir = './Dataset/ShoeV2/seg_results'
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-    
-    image = cv2.imread(img_path)    
-    
-    maskrcnn_config_file = './Code/config/maskrcnn_inference.yaml'
-    with open(maskrcnn_config_file, 'r', encoding='utf-8') as f:
-        config = f.read()
-        config = yaml.safe_load(config)
-        seg = get_segmentation_annotation(img_path, config, save_dir=None)
-    f.close()
-    
-    superpoint_config_file = './Code/config/superpoint_inference.yaml'
-    with open(superpoint_config_file, 'r', encoding='utf-8') as f:
-        config = f.read()
-        config = yaml.safe_load(config)
-        points = get_superpoint_points(img_path, config, save_dir=None)
-    f.close()    
-    
-    airobj_config_file = './Code/config/airobj_inference.yaml'
-    with open(airobj_config_file, 'r', encoding='utf-8') as f:
-        config = f.read()
-        config = yaml.safe_load(config)
-        import pdb; pdb.set_trace()
-        airobj_desc = get_airobj_descriptor(image, seg, points, config, save_dir=None)
-    f.close()

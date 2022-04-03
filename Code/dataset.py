@@ -61,8 +61,11 @@ class FGSBIR_Dataset(data.Dataset):
             negative_img = self.train_transform(negative_img)
 
             sample = {'sketch_img': sketch_img, 'sketch_path': sketch_path,
+                      'sketch_mask': '', 'sketch_points':'',
                       'positive_img': positive_img, 'positive_path': positive_sample,
-                      'negative_img': negative_img, 'negative_path': negative_sample
+                      'positive_mask':'', 'positive_points':'',
+                      'negative_img': negative_img, 'negative_path': negative_sample,
+                      'negative_mask':'', 'negative_points':''
                       }
 
         elif self.mode == 'Test':

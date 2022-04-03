@@ -1,0 +1,16 @@
+base_dir: '/Users/ramya/University/misc/AirObject_trials/test_on_their_test' # Path to Base Directory
+maskrcnn_model_path: '/Users/ramya/University/misc/AirObject/models/maskrcnn_model.pth' # Path to MaskRCNN Model
+data:
+    nclass: 81
+    normal_size: [480, 640] # min_size, max_size
+model:
+  maskrcnn:
+    add_maskrcnn: true
+    trainable_layers: 5  # backbone trainable layers
+    fix_backbone: true
+    backbone_type: 'resnet50'
+    image_mean: [0.45, 0.45, 0.45]
+    image_std: [0.225, 0.225, 0.225]
+num_gpu: [0]
+use_gpu: false
+public_model: 0

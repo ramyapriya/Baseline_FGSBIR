@@ -1,0 +1,22 @@
+base_dir: '/Users/ramya/University/misc/AirObject_trials/test_on_their_test' # Directory with images, segmentations and superpoint features
+output_dir: '/Users/ramya/University/misc/AirObject_trials/test_on_their_test/output' # Directory to save global tracking results
+save_video: False # Save tracking video
+video_path: '' # Output path for tracking video
+
+airobj_model_path: '/Users/ramya/University/misc/AirObject/models/airobject_model.pth'
+model:
+  airobj:
+    descriptor_dim: 256
+    points_encoder_dims: [2, 4, 8, 16]
+    hidden_dim: 512
+    dropout: 0
+    alpha: 0.2
+    nheads: 4
+    nout: 2048
+    temporal_encoder_dim: 2048 # AirObject
+    temporal_encoder_out_dim: 2048
+    temporal_kernel_size: 1
+
+num_gpu: [0]
+use_gpu: false
+public_model: 0

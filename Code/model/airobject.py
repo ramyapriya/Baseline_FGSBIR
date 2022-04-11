@@ -29,6 +29,7 @@ class AirObject(nn.Module):
       batch_points (List[Tensor]): Dimensions = [BxNx2]; normalized points, sequence of tensors belonging to an object
       batch_descs (List[Tensor]): Dimensions = [BxNxD]; local feature descriptors, sequence of tensors belonging to an object
       batch_adj (List[Tensor]): Dimensions = [BxNxN]; sequence of adjacency matrices corresponding to the triangulation based object points graph
+      N = number of points after the triangulation 
     '''
     
     batch_node_features = []
@@ -36,12 +37,12 @@ class AirObject(nn.Module):
     for points, descs, adj in zip(batch_points, batch_descs, batch_adj):
       
       # Point Encoder: MLP with hidden dimensions in points_encoder_dims (list)
-      encoded_points = self.points_encoder(points) # Output size: N x points_encoder_dims[-1]
+      encoded_points = self.points_encoder(points) # Output size: N x 16
       
-      features = torch.cat((descs, encoded_points), dim=1) # Size: N x (points_encoder_dims[-1] + descriptor_dim)
+      features = torch.cat((descs, encoded_points), dim=1) # Size: N x (16 + 256) = N x 272
       
       # GraphAtten
-      node_features = self.gcn(features, adj)  # Output size: N x AirObject_dim
+      node_features = self.gcn(features, adj)  # Output size: N x 2048
       batch_node_features.append(node_features)
 
     if len(batch_node_features) != 1:
@@ -50,7 +51,7 @@ class AirObject(nn.Module):
       evol_features = batch_node_features[0]
       
      # Temporal 1D conv 
-    airobj_desc = self.tcn(evol_features.unsqueeze(0)) # Output size: N x temporal_encoder_out_dim
+    airobj_desc = self.tcn(evol_features.unsqueeze(0)) # Output size: N x 2048
 
     return airobj_desc
 

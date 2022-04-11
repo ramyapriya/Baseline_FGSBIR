@@ -8,6 +8,7 @@ import yaml
 import os
 
 from scipy.spatial import Delaunay
+import viz
 
 def get_neighbor(vertex_id,tri):
     # get neighbor vertexes of a vertex
@@ -59,7 +60,7 @@ def collate_self_train(batch):
 
     return batch_mod
 
-def get_segmentation_annotation(img_path, config, save_dir=None):
+def get_segmentation_annotation(image, config, save_dir=None):
     """Given an input image, get maskrcnn segmentation masks
 
     Args:
@@ -73,7 +74,7 @@ def get_segmentation_annotation(img_path, config, save_dir=None):
                            dict with ['boxes', 'labels', 'scores', 'masks'] keys
     """
     
-    image_name = os.path.basename(img_path).replace('.png','')
+    # image_name = os.path.basename(img_path).replace('.png','')
     
     # get configs
     data_config = config['data']
@@ -83,14 +84,14 @@ def get_segmentation_annotation(img_path, config, save_dir=None):
     maskrcnn_model.eval()
     
     batch = {}
-    image = cv2.imread(img_path)
+    # image = cv2.imread(img_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = cv2.merge([image, image, image])
     image = torch.from_numpy(image).type(torch.float32)
     image = image.permute(2,0,1)
     image /= 255
     batch['image'] = [image]
-    batch['image_name'] = [str(image_name)]
+    batch['image_name'] = ['output_mask.png']
     
     with torch.no_grad():
         original_images = batch['image']
@@ -114,7 +115,7 @@ def get_segmentation_annotation(img_path, config, save_dir=None):
 
     return detections
 
-def get_superpoint_points(img_path, config, save_dir=None):
+def get_superpoint_points(image, config, save_dir=None):
     """Given an input image, get points from superpoint model
 
     Args:
@@ -126,7 +127,7 @@ def get_superpoint_points(img_path, config, save_dir=None):
         points (List): List of points, where each point is represented as a dict
                        with ['points', 'point_descs'] keys
     """
-    image_name = os.path.basename(img_path).replace('.png','')
+    # image_name = os.path.basename(img_path).replace('.png','')
     
     # get configs
     data_config = config['data']
@@ -137,14 +138,15 @@ def get_superpoint_points(img_path, config, save_dir=None):
     superpoint_model.eval()
     
     batch = {}
-    src = cv2.imread(img_path)
-    image = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+    
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     image = cv2.merge([image, image, image])
     image = torch.from_numpy(image).type(torch.float32)
     image = image.permute(2,0,1)
     image /= 255
     batch['image'] = [image]
-    batch['image_name'] = [str(image_name)]
+    # batch['image_name'] = [str(image_name)]
+    batch['image_name'] = 'output_points.png'
     
     with torch.no_grad():
 
@@ -199,6 +201,7 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
     
     airobj_adjs, airobj_points, airobj_descs = [], [], []
     ann_masks, ann_boxes = [], []
+    tri_objects = []
     for instance in range(seg['masks'].shape[0]):
         mask = seg['masks'][instance, 0, :, :].numpy()
         object_filter = mask[keypoints[:,0].T,keypoints[:,1].T]
@@ -210,7 +213,7 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
             continue
         
         adj = get_adj(np_obj_pts, tri)
-
+        tri_objects.append(tri)
         airobj_adjs.append(torch.from_numpy(adj).float().to(device)) # Size: NxN
         airobj_points.append(keypoints[np.where(object_filter==1)[0]].float().to(device)) # Size: Nx2
         airobj_descs.append(descriptors[np.where(object_filter==1)[0]].float().to(device)) # Size: NxD
@@ -232,9 +235,7 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
         airobj_obj_descs = torch.cat(airobj_obj_descs)
         
     if save_dir:
-        # results = viz.save_detection_results([image], ['output.png'], save_dir,
-        #                                     [seg], None, [points], True, False)
-        pass
+        results = viz.save_detection_results([image], ['output.png'], save_dir, [seg], None, [points], [tri_objects], True, True)
     
     return airobj_obj_descs
     

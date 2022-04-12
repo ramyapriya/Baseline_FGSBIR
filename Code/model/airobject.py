@@ -23,7 +23,7 @@ class AirObject(nn.Module):
     self.gcn = GCN(nfeat, nhid, nout, alpha, nheads)
     self.tcn = TCN(temporal_nfeat, temporal_nout, temporal_kernel_size)
 
-  def forward(self, batch_points, batch_descs, batch_adj):
+  def forward(self, batch_points, batch_descs, batch_adj):#, invalid_ids):
     '''
     inputs:
       batch_points (List[Tensor]): Dimensions = [BxNx2]; normalized points, sequence of tensors belonging to an object
@@ -32,28 +32,29 @@ class AirObject(nn.Module):
       N = number of points after the triangulation 
     '''
     
-    batch_node_features = []
-
-    for points, descs, adj in zip(batch_points, batch_descs, batch_adj):
-      
+    batch_airobj_desc = []
+    for idx, (points, descs, adj) in enumerate(zip(batch_points, batch_descs, batch_adj)):
+      # if idx in invalid_ids:
+      #   continue
       # Point Encoder: MLP with hidden dimensions in points_encoder_dims (list)
-      encoded_points = self.points_encoder(points) # Output size: N x 16
-      
-      features = torch.cat((descs, encoded_points), dim=1) # Size: N x (16 + 256) = N x 272
-      
-      # GraphAtten
-      node_features = self.gcn(features, adj)  # Output size: N x 2048
-      batch_node_features.append(node_features)
+      try:
+        encoded_points = self.points_encoder(points) # Output size: N x 16
+        
+        features = torch.cat((descs, encoded_points), dim=1) # Size: N x (16 + 256) = N x 272
+        
+        # GraphAtten
+        node_features = self.gcn(features, adj)  # Output size: N x 2048
+        
+        # Temporal 1D conv
+        airobj_desc = self.tcn(node_features.unsqueeze(0)) # Output size: N x 2048
 
-    if len(batch_node_features) != 1:
-      evol_features = torch.cat(batch_node_features)
-    else:
-      evol_features = batch_node_features[0]
-      
-     # Temporal 1D conv 
-    airobj_desc = self.tcn(evol_features.unsqueeze(0)) # Output size: N x 2048
+        batch_airobj_desc.append(airobj_desc)
+      except:
+        import ipdb; ipdb.set_trace()
+    
+    batch_airobj_desc = torch.stack(batch_airobj_desc, 0)
 
-    return airobj_desc
+    return batch_airobj_desc
 
 
 class PointsEncoder(nn.Module):

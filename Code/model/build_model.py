@@ -241,7 +241,6 @@ def build_airobj(configs):
       model.load_state_dict(model_dict)
     else:
       print("loading on cpu")
-      
       model.load_state_dict(model_dict)
       
     print("load model from {}".format(pretrained_model_path))

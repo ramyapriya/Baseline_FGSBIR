@@ -1,5 +1,5 @@
 base_dir: './misc/AirObject_trials/test_on_their_test' # Path to Base Directory
-maskrcnn_model_path: './models/maskrcnn_model.pth' # Path to MaskRCNN Model
+maskrcnn_model_path: '/vol/research/sketchcaption/ramya/Baseline_FGSBIR/models/maskrcnn_model.pth' # Path to MaskRCNN Model
 data:
     nclass: 81
     normal_size: [480, 640] # min_size, max_size

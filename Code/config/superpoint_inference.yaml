@@ -1,11 +1,11 @@
 base_dir: './misc/AirObject_trials/test_on_their_test' # Path to Base Directory
-superpoint_model_path: './models/points_model.pth' # Path to SuperPoint Model
+superpoint_model_path: '/vol/research/sketchcaption/ramya/Baseline_FGSBIR/models/points_model.pth' # Path to SuperPoint Model
 data:
     normal_size: [480, 640] # min_size, max_size
 model:
   superpoint:
     cell : 8
-    detection_threshold: 0.07
+    detection_threshold: 0.1
     batch_size: 1
 num_gpu: [0]
 use_gpu: true

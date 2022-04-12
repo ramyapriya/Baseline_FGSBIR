@@ -1,12 +1,12 @@
 import torch
+import torch.nn.functional as F
 import cv2
 import numpy as np
 from dataset_utils import postprocess as post
 from dataset_utils.preprocess import preprocess_data
 from model.build_model import build_superpoint_model, build_maskrcnn, build_airobj
 import yaml
-import os
-
+import os, time
 from scipy.spatial import Delaunay
 import viz
 
@@ -40,27 +40,7 @@ def tensor_to_numpy(image):
         img = img.copy()
     return img
 
-
-def collate_self_train(batch):
-    batch_mod = {'sketch_img': [], 'sketch_boxes': [],
-                 'positive_img': [], 'positive_boxes': [],
-                 'negative_img': [], 'negative_boxes': [],
-                 }
-    for i_batch in batch:
-        batch_mod['sketch_img'].append(i_batch['sketch_img'])
-        batch_mod['positive_img'].append(i_batch['positive_img'])
-        batch_mod['negative_img'].append(i_batch['negative_img'])
-        batch_mod['sketch_boxes'].append(torch.tensor(i_batch['sketch_boxes']).float())
-        batch_mod['positive_boxes'].append(torch.tensor(i_batch['positive_boxes']).float())
-        batch_mod['negative_boxes'].append(torch.tensor(i_batch['negative_boxes']).float())
-
-    batch_mod['sketch_img'] = torch.stack(batch_mod['sketch_img'], dim=0)
-    batch_mod['positive_img'] = torch.stack(batch_mod['positive_img'], dim=0)
-    batch_mod['negative_img'] = torch.stack(batch_mod['negative_img'], dim=0)
-
-    return batch_mod
-
-def get_segmentation_annotation(image, config, save_dir=None):
+def get_segmentation_annotation(image, maskrcnn_model, config, save_dir=None):
     """Given an input image, get maskrcnn segmentation masks
 
     Args:
@@ -78,21 +58,22 @@ def get_segmentation_annotation(image, config, save_dir=None):
     
     # get configs
     data_config = config['data']
-    
-    # model
-    maskrcnn_model = build_maskrcnn(config)
-    maskrcnn_model.eval()
-    
     batch = {}
-    # image = cv2.imread(img_path)
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    if len(image.shape) < 2 or len(image.shape) > 3:
+        assert('Invalid type: Image ')
+        return
+    
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
     image = cv2.merge([image, image, image])
     image = torch.from_numpy(image).type(torch.float32)
     image = image.permute(2,0,1)
     image /= 255
     batch['image'] = [image]
     batch['image_name'] = ['output_mask.png']
-    
+
     with torch.no_grad():
         original_images = batch['image']
         original_images = [tensor_to_numpy(img.clone()) for img in original_images]
@@ -106,7 +87,7 @@ def get_segmentation_annotation(image, config, save_dir=None):
         _, detections = maskrcnn_model(images, sizes) 
 
         # postprocess
-        detections = post.postprocess_detections(new_sizes, original_sizes, conf_threshold=0.2, detections=detections)
+        detections = post.postprocess_detections(new_sizes, original_sizes, conf_threshold=0.3, detections=detections)
         
     # save results
     if save_dir is not None:
@@ -115,7 +96,7 @@ def get_segmentation_annotation(image, config, save_dir=None):
 
     return detections
 
-def get_superpoint_points(image, config, save_dir=None):
+def get_superpoint_points(image, superpoint_model, config, save_dir=None):
     """Given an input image, get points from superpoint model
 
     Args:
@@ -133,13 +114,15 @@ def get_superpoint_points(image, config, save_dir=None):
     data_config = config['data']
     detection_threshold = config['model']['superpoint']['detection_threshold']
     
-    # model
-    superpoint_model = build_superpoint_model(config)
-    superpoint_model.eval()
-    
     batch = {}
+
+    if len(image.shape) < 2 or len(image.shape) > 3:
+        assert('Invalid type: Image ')
+        return
     
-    image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    
     image = cv2.merge([image, image, image])
     image = torch.from_numpy(image).type(torch.float32)
     image = image.permute(2,0,1)
@@ -238,22 +221,135 @@ def get_airobj_descriptor(image, seg, points, config, save_dir=None):
         results = viz.save_detection_results([image], ['output.png'], save_dir, [seg], None, [points], [tri_objects], True, True)
     
     return airobj_obj_descs
+
+def collate_self_train(batch):
+    batch_mod = {'sketch_img': [], 'sketch_img_mask': [], 'sketch_img_points': [], 'sketch_img_descs': [],
+                 'positive_img': [], 'positive_img_mask': [], 'positive_img_points': [], 'positive_img_descs': [],
+                 'negative_img': [], 'negative_img_mask': [], 'negative_img_points': [], 'negative_img_descs': []
+                }
+    for i_batch in batch:
+        batch_mod['sketch_img'].append(i_batch['sketch_img'])
+        batch_mod['positive_img'].append(i_batch['positive_img'])
+        batch_mod['negative_img'].append(i_batch['negative_img'])
+        batch_mod['sketch_img_mask'].append(i_batch['sketch_img_mask'][0]['masks'])
+        batch_mod['sketch_img_points'].append(i_batch['sketch_img_points'][0]['points'])
+        batch_mod['sketch_img_descs'].append(i_batch['sketch_img_points'][0]['point_descs'])
+        batch_mod['positive_img_mask'].append(i_batch['positive_img_mask'][0]['masks'])
+        batch_mod['positive_img_points'].append(i_batch['positive_img_points'][0]['points'])
+        batch_mod['positive_img_descs'].append(i_batch['positive_img_points'][0]['point_descs'])
+        batch_mod['negative_img_mask'].append(i_batch['negative_img_mask'][0]['masks'])
+        batch_mod['negative_img_points'].append(i_batch['negative_img_points'][0]['points'])
+        batch_mod['negative_img_descs'].append(i_batch['negative_img_points'][0]['point_descs'])
+
+    batch_mod['sketch_img'] = torch.stack(batch_mod['sketch_img'], dim=0)
+    batch_mod['positive_img'] = torch.stack(batch_mod['positive_img'], dim=0)
+    batch_mod['negative_img'] = torch.stack(batch_mod['negative_img'], dim=0)
+
+    return batch_mod
     
     
 def collate_self_test(batch):
-    batch_mod = {'sketch_img': [], 'sketch_boxes': [], 'sketch_path': [],
-                 'positive_img': [], 'positive_boxes': [], 'positive_path': [],
-                 }
-
+    batch_mod = {'sketch_img': [], 'sketch_img_mask': [], 'sketch_img_points': [], 'sketch_img_descs': [],
+                 'positive_img': [], 'positive_img_mask': [], 'positive_img_points': [], 'positive_img_descs': [],
+                 'sketch_path': [], 'positive_path': [] 
+                }
     for i_batch in batch:
         batch_mod['sketch_img'].append(i_batch['sketch_img'])
         batch_mod['sketch_path'].append(i_batch['sketch_path'])
         batch_mod['positive_img'].append(i_batch['positive_img'])
         batch_mod['positive_path'].append(i_batch['positive_path'])
-        batch_mod['sketch_boxes'].append(torch.tensor(i_batch['sketch_boxes']).float())
-        batch_mod['positive_boxes'].append(torch.tensor(i_batch['positive_boxes']).float())
+        batch_mod['sketch_img_mask'].append(i_batch['sketch_img_mask'][0]['masks'])
+        batch_mod['sketch_img_points'].append(i_batch['sketch_img_points'][0]['points'])
+        batch_mod['sketch_img_descs'].append(i_batch['sketch_img_points'][0]['point_descs'])
+        batch_mod['positive_img_mask'].append(i_batch['positive_img_mask'][0]['masks'])
+        batch_mod['positive_img_points'].append(i_batch['positive_img_points'][0]['points'])
+        batch_mod['positive_img_descs'].append(i_batch['positive_img_points'][0]['point_descs'])
 
     batch_mod['sketch_img'] = torch.stack(batch_mod['sketch_img'], dim=0)
     batch_mod['positive_img'] = torch.stack(batch_mod['positive_img'], dim=0)
 
     return batch_mod
+
+def get_batch_objects(batch, device, input_type):
+    """
+    batch_size 
+
+    """
+    batch_size = batch['sketch_img'].shape[0]
+    batch_points, batch_descs, batch_adjs, iids = [], [], [], []
+    for idx in range(batch_size):
+        
+        mask = batch[input_type+'_img_mask'][idx]
+        keypoints =  batch[input_type+'_img_points'][idx]
+        descriptors =  batch[input_type+'_img_descs'][idx]
+        object_filter = torch.ones(keypoints.shape[0])
+
+        if torch.numel(mask): # If segmentation fails, include all kepypoints for 
+                              # Delaunay Triangulation
+            mask = mask[0].squeeze()
+            object_filter = mask[keypoints[:,0].T,keypoints[:,1].T]
+            np_obj_pts = keypoints[torch.where(object_filter==1.0)[0]].numpy()
+        else:
+            np_obj_pts = keypoints.numpy()
+
+        if not torch.numel(keypoints) or not np.size(np_obj_pts) or np_obj_pts.shape[0] < 2:
+            iids.append(idx)
+        try:
+            tri = Delaunay(np_obj_pts, qhull_options='QJ')
+            adj = get_adj(np_obj_pts, tri)
+        except:
+            adj = np.ones((np_obj_pts.shape[0], np_obj_pts.shape[0]))
+            # iids.append(idx)
+
+        batch_adjs.append(torch.from_numpy(adj).float().to(device))
+        batch_points.append(keypoints[np.where(object_filter==1)[0]].float().to(device))
+        batch_descs.append(descriptors[np.where(object_filter==1)[0]].float().to(device))
+    
+    return batch_points, batch_descs, batch_adjs, iids
+
+def evaluate(dataloader_test, model):
+    Image_Feature_ALL = []
+    Image_Name = []
+    Sketch_Feature_ALL = []
+    Sketch_Name = []
+    start_time = time.time()
+    model.eval()
+    
+    for idx, sampled_batch in enumerate(dataloader_test):
+        
+        anchor_points, anchor_descs, anchor_adjs, iids = get_batch_objects(sampled_batch, device, 'sketch')
+        positive_points, positive_descs, positive_adjs, iids = get_batch_objects(sampled_batch, device, 'positive')
+        
+
+        if len(anchor_points) == 1 and not torch.numel(anchor_points[0]):
+            return -1, -1
+        sketch_feature = model(anchor_points, anchor_descs, anchor_adjs)
+        positive_feature = model(positive_points, positive_descs, positive_adjs)
+
+        Sketch_Feature_ALL.extend(sketch_feature)
+        Sketch_Name.extend(sampled_batch['sketch_path'])
+
+        for i_num, positive_name in enumerate(sampled_batch['positive_path']):
+            if positive_name not in Image_Name:
+                Image_Name.append(sampled_batch['positive_path'][i_num])
+                Image_Feature_ALL.append(positive_feature[i_num])
+
+    rank = torch.zeros(len(Sketch_Name))
+    Image_Feature_ALL = torch.stack(Image_Feature_ALL)
+
+    for num, sketch_feature in enumerate(Sketch_Feature_ALL):
+        s_name = Sketch_Name[num]
+        sketch_query_name = '_'.join(s_name.split('/')[-1].split('_')[:-1])
+        position_query = Image_Name.index(sketch_query_name)
+
+        distance = F.pairwise_distance(sketch_feature.unsqueeze(0), Image_Feature_ALL)
+        target_distance = F.pairwise_distance(sketch_feature.unsqueeze(0),
+                                                Image_Feature_ALL[position_query].unsqueeze(0))
+
+        rank[num] = distance.le(target_distance).sum()
+
+    top1 = rank.le(1).sum().numpy() / rank.shape[0]
+    top10 = rank.le(10).sum().numpy() / rank.shape[0]
+
+    print('Time to EValuate:{}'.format(time.time() - start_time))
+    return top1, top10

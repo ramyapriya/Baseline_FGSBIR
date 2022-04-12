@@ -1,0 +1,27 @@
+save_dir: '/vol/research/sketchcaption/ramya/Airobj_experiments/training_runs/apr_9' # Logging directory
+airobj_model_path: '/vol/research/sketchcaption/ramya/Baseline_FGSBIR/models/airobject_model.pth' # Path to YT-VIS Finetuned Graph Attention Encoder
+resume: False
+sum_iter: 
+optimizer_path: ''
+num_gpu: [0]
+model:
+  airobj:
+    descriptor_dim: 256
+    points_encoder_dims: [2, 4, 8, 16]
+    hidden_dim: 512
+    dropout: 0
+    alpha: 0.2
+    nheads: 4
+    nout: 2048
+    temporal_encoder_dim: 2048
+    temporal_encoder_out_dim: 2048
+    temporal_kernel_size: 1
+    train:
+      seqlen: 4
+      batch_size: 16
+      positive_margin: 1
+      negative_margin: 0.2
+      lambda_d: 1
+      epochs: 15
+      lr: 0.0001
+      checkpoint: 500
